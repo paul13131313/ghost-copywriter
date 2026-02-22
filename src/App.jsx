@@ -232,11 +232,19 @@ export default function Ghost() {
 
   const saveImage = async () => {
     if (!cardRef.current) return;
-    const canvas = await html2canvas(cardRef.current, {
+    // オフスクリーンにクローンしてキャプチャ（ブラウザUI要素の混入を防ぐ）
+    const clone = cardRef.current.cloneNode(true);
+    clone.style.position = "fixed";
+    clone.style.left = "-9999px";
+    clone.style.top = "0";
+    clone.style.zIndex = "-1";
+    document.body.appendChild(clone);
+    const canvas = await html2canvas(clone, {
       scale: 2,
       useCORS: true,
       backgroundColor: null,
     });
+    document.body.removeChild(clone);
     canvas.toBlob(async (blob) => {
       if (navigator.canShare && navigator.canShare({ files: [new File([blob], "ghost.jpg", { type: "image/jpeg" })] })) {
         const file = new File([blob], `ghost-${Date.now()}.jpg`, { type: "image/jpeg" });
