@@ -442,7 +442,12 @@ export default function Ghost() {
                     const WJ = '\u2060';
                     const segmenter = new Intl.Segmenter("ja", { granularity: "word" });
                     const isHiragana = (s) => /^[\u3040-\u309F]+$/.test(s);
-                    const endsWithKanji = (s) => /[\u4E00-\u9FFF]$/.test(s);
+                    const isKanji = (ch) => /[\u4E00-\u9FFF]/.test(ch);
+                    const isKatakana = (ch) => /[\u30A0-\u30FF]/.test(ch);
+                    const endsWithKanji = (s) => isKanji(s[s.length - 1]);
+                    const startsWithKanji = (s) => isKanji(s[0]);
+                    const endsWithKatakana = (s) => isKatakana(s[s.length - 1]);
+                    const startsWithKatakana = (s) => isKatakana(s[0]);
 
                     const protectLine = (text) => {
                       const segs = [...segmenter.segment(text)];
@@ -467,8 +472,16 @@ export default function Ghost() {
                         if (!seg.isWordLike && isHiragana(str) && str.length <= 2) {
                           result += WJ + protected_;
                         }
-                        // 送り仮名: 前のセグメントが漢字で終わり、今のセグメントがひらがなで始まる単語
-                        else if (seg.isWordLike && endsWithKanji(prev.segment) && isHiragana(str)) {
+                        // 送り仮名: 前のセグメントが漢字で終わり、今のセグメントがひらがなで始まる
+                        else if (endsWithKanji(prev.segment) && isHiragana(str)) {
+                          result += WJ + protected_;
+                        }
+                        // 漢字の連続: 前が漢字で終わり、今が漢字で始まる（五本、完全など）
+                        else if (endsWithKanji(prev.segment) && startsWithKanji(str)) {
+                          result += WJ + protected_;
+                        }
+                        // カタカナの連続: 前がカタカナで終わり、今がカタカナで始まる
+                        else if (endsWithKatakana(prev.segment) && startsWithKatakana(str)) {
                           result += WJ + protected_;
                         }
                         else {
