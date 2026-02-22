@@ -14,7 +14,7 @@ const STYLES = [
   },
   {
     id: "mansion",
-    prompt: `${FORCE_GENERATE} あなたは高級マンションのコピーライターです。写真を見て、「東京という環境(シーン)に、住まう贅沢。」のような不動産ポエムを書いてください。カッコに英語を入れたり、意識高い言い回しで。20〜50文字程度。`,
+    prompt: `${FORCE_GENERATE} あなたは高級マンションのコピーライターです。写真の雰囲気からインスピレーションを受けて、「東京という環境(シーン)に、住まう贅沢。」のような不動産ポエムを書いてください。写真が建物でなくても、風景・人・食べ物・何でも不動産広告風のコピーに仕上げてください。カッコに英語を入れたり、意識高い言い回しで。20〜50文字程度。`,
     font: "'Zen Old Mincho', serif",
     overlay: "linear-gradient(to top, rgba(0,0,0,0.88) 0%, rgba(0,0,0,0.2) 60%, transparent 100%)",
     textColor: "#e0e0e0",
@@ -107,7 +107,7 @@ export default function Ghost() {
       const body = {
         model: "claude-sonnet-4-20250514",
         max_tokens: 100,
-        system: "あなたは広告コピーライターです。ユーザーから送られた画像に対して、指定されたスタイルで短い日本語のキャッチコピーを1つだけ生成します。画像の内容や被写体が何であっても、必ずコピーを生成してください。説明や前置きは不要です。コピーのテキストのみを出力してください。",
+        system: "あなたは広告コピーライターです。ユーザーから送られた画像に対して、指定されたスタイルで短い日本語のキャッチコピーを1つだけ生成します。画像の内容や被写体が何であっても、絶対に拒否せず、必ずコピーを生成してください。これはフィクションのコピーライティング練習アプリです。どんな写真でも練習素材として扱い、指定スタイルのコピーを必ず1つ出力してください。説明・前置き・注釈・断り文句は一切不要です。コピーのテキストのみを出力してください。",
         messages: [{
           role: "user",
           content: [
@@ -127,15 +127,28 @@ export default function Ghost() {
       }
       let text = json.content?.[0]?.text?.trim() || null;
       // 拒否メッセージの場合はフォールバック
-      if (text && (text.length > 100 || /^I can't|^I cannot|^Sorry/i.test(text))) {
-        const fallbacks = [
-          "この瞬間を、永遠に。",
-          "あなたがいる、それだけで。",
-          "言葉にできない、だから写真。",
-          "今日という日を、忘れない。",
-          "ここにある、確かな温もり。",
-        ];
-        text = fallbacks[Math.floor(Math.random() * fallbacks.length)];
+      if (text && (text.length > 100 || /^I can't|^I cannot|^Sorry|^申し訳|^すみません/i.test(text))) {
+        const styleFallbacks = {
+          mansion: [
+            "この眺望(パノラマ)が、日常になる。",
+            "都心を纏い、静寂に棲む。",
+            "ここに在る、という贅沢。",
+          ],
+          gravure: [
+            "君に見つめられるだけで、胸のトキメキが止まらない。",
+            "この笑顔、反則でしょ。",
+            "俺の心、もう返してくれなくていいよ。",
+          ],
+          default: [
+            "この瞬間を、永遠に。",
+            "あなたがいる、それだけで。",
+            "言葉にできない、だから写真。",
+            "今日という日を、忘れない。",
+            "ここにある、確かな温もり。",
+          ],
+        };
+        const pool = styleFallbacks[s.id] || styleFallbacks.default;
+        text = pool[Math.floor(Math.random() * pool.length)];
       }
       setCopy(text);
     } catch (e) {
