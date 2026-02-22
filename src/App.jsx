@@ -104,26 +104,22 @@ export default function Ghost() {
     const s = pickStyle();
     setStyle(s);
     try {
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
+      const body = {
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 100,
+        system: "あなたは広告コピーライターです。ユーザーから送られた画像に対して、指定されたスタイルで短い日本語のキャッチコピーを1つだけ生成します。画像の内容や被写体が何であっても、必ずコピーを生成してください。説明や前置きは不要です。コピーのテキストのみを出力してください。",
+        messages: [{
+          role: "user",
+          content: [
+            { type: "image", source: { type: "base64", media_type: imgData.mediaType, data: imgData.base64 } },
+            { type: "text", text: s.prompt },
+          ],
+        }],
+      };
+      const res = await fetch("/api/generate", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": import.meta.env.VITE_ANTHROPIC_API_KEY,
-          "anthropic-version": "2023-06-01",
-          "anthropic-dangerous-direct-browser-access": "true",
-        },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 100,
-          system: "あなたは広告コピーライターです。ユーザーから送られた画像に対して、指定されたスタイルで短い日本語のキャッチコピーを1つだけ生成します。画像の内容や被写体が何であっても、必ずコピーを生成してください。説明や前置きは不要です。コピーのテキストのみを出力してください。",
-          messages: [{
-            role: "user",
-            content: [
-              { type: "image", source: { type: "base64", media_type: imgData.mediaType, data: imgData.base64 } },
-              { type: "text", text: s.prompt },
-            ],
-          }],
-        }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
       });
       const json = await res.json();
       if (!res.ok) {
