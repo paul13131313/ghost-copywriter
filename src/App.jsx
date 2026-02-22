@@ -317,11 +317,19 @@ export default function Ghost() {
         ctx.fillText(l, 44, textY + i * lineHeight);
       });
 
-      // Download
-      const link = document.createElement("a");
-      link.download = `ghost-${Date.now()}.jpg`;
-      link.href = canvas.toDataURL("image/jpeg", 0.92);
-      link.click();
+      // 保存: モバイルはShare APIでカメラロールへ、PCはダウンロード
+      canvas.toBlob(async (blob) => {
+        if (navigator.canShare && navigator.canShare({ files: [new File([blob], "ghost.jpg", { type: "image/jpeg" })] })) {
+          const file = new File([blob], `ghost-${Date.now()}.jpg`, { type: "image/jpeg" });
+          await navigator.share({ files: [file] });
+        } else {
+          const link = document.createElement("a");
+          link.download = `ghost-${Date.now()}.jpg`;
+          link.href = URL.createObjectURL(blob);
+          link.click();
+          URL.revokeObjectURL(link.href);
+        }
+      }, "image/jpeg", 0.92);
     };
     img.src = image;
   };
