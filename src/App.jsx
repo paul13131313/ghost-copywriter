@@ -143,7 +143,10 @@ export default function Ghost() {
       }
       setCopy(text);
     } catch (e) {
-      setError(e.message || "失敗。もう一度。");
+      const msg = e instanceof TypeError
+        ? `通信エラー: ${e.message} (base64: ${imgData?.base64?.length || 0}文字)`
+        : (e.message || "不明なエラー");
+      setError(msg);
     } finally {
       setLoading(false);
     }
