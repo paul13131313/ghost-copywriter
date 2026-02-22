@@ -125,8 +125,11 @@ export default function Ghost() {
           }],
         }),
       });
-      const data = await res.json();
-      let text = data.content?.[0]?.text?.trim() || null;
+      const json = await res.json();
+      if (!res.ok) {
+        throw new Error(json.error?.message || `API error: ${res.status}`);
+      }
+      let text = json.content?.[0]?.text?.trim() || null;
       // 拒否メッセージの場合はフォールバック
       if (text && (text.length > 100 || /^I can't|^I cannot|^Sorry/i.test(text))) {
         const fallbacks = [
@@ -139,8 +142,8 @@ export default function Ghost() {
         text = fallbacks[Math.floor(Math.random() * fallbacks.length)];
       }
       setCopy(text);
-    } catch {
-      setError("失敗。もう一度。");
+    } catch (e) {
+      setError(e.message || "失敗。もう一度。");
     } finally {
       setLoading(false);
     }
@@ -151,7 +154,7 @@ export default function Ghost() {
       const img = new Image();
       img.onload = () => {
         const canvas = document.createElement("canvas");
-        const maxSize = 1200;
+        const maxSize = 800;
         let { width, height } = img;
         if (width > height && width > maxSize) {
           height = (height * maxSize) / width;
@@ -164,7 +167,7 @@ export default function Ghost() {
         canvas.height = height;
         const ctx = canvas.getContext("2d");
         ctx.drawImage(img, 0, 0, width, height);
-        const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+        const dataUrl = canvas.toDataURL("image/jpeg", 0.7);
         resolve({
           base64: dataUrl.split(",")[1],
           mediaType: "image/jpeg"
