@@ -70,7 +70,12 @@ function pickStyle() {
   return STYLES[idx];
 }
 
+const PASSWORD = "paul13";
+
 export default function Ghost() {
+  const [authed, setAuthed] = useState(() => sessionStorage.getItem("ghost-auth") === "1");
+  const [passInput, setPassInput] = useState("");
+  const [passError, setPassError] = useState(false);
   const [image, setImage] = useState(null);
   const [imageData, setImageData] = useState(null);
   const [copy, setCopy] = useState(null);
@@ -79,6 +84,16 @@ export default function Ghost() {
   const [dragging, setDragging] = useState(false);
   const [error, setError] = useState(null);
   const fileRef = useRef(null);
+
+  const handleLogin = () => {
+    if (passInput === PASSWORD) {
+      sessionStorage.setItem("ghost-auth", "1");
+      setAuthed(true);
+      setPassError(false);
+    } else {
+      setPassError(true);
+    }
+  };
 
   const generate = async (data) => {
     const imgData = data || imageData;
@@ -308,6 +323,31 @@ export default function Ghost() {
     };
     img.src = image;
   };
+
+  if (!authed) {
+    return (
+      <div style={{ fontFamily: "'Noto Sans JP', sans-serif", minHeight: "100vh", background: "#080808", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24 }}>
+        <div style={{ fontSize: 44, filter: "grayscale(1)", opacity: 0.25, marginBottom: 20 }}>👻</div>
+        <div style={{ fontSize: 9, letterSpacing: "0.55em", color: "#2a2a2a", marginBottom: 5 }}>AI COPYWRITER</div>
+        <div style={{ fontSize: 30, fontWeight: 900, color: "#fff", letterSpacing: "0.1em", marginBottom: 32 }}>"GHOST"</div>
+        <input
+          type="password"
+          value={passInput}
+          onChange={(e) => { setPassInput(e.target.value); setPassError(false); }}
+          onKeyDown={(e) => e.key === "Enter" && handleLogin()}
+          placeholder="PASSWORD"
+          style={{
+            width: 200, padding: "12px 16px",
+            background: "#111", border: `1px solid ${passError ? "#ff4444" : "#1e1e1e"}`,
+            borderRadius: 3, color: "#fff", fontSize: 12,
+            letterSpacing: "0.3em", textAlign: "center",
+            outline: "none", fontFamily: "inherit",
+          }}
+        />
+        {passError && <div style={{ color: "#ff4444", fontSize: 10, marginTop: 8 }}>パスワードが違います</div>}
+      </div>
+    );
+  }
 
   return (
     <div style={{ fontFamily: "'Noto Sans JP', sans-serif", minHeight: "100vh", background: "#080808", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24 }}>
