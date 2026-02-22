@@ -312,7 +312,7 @@ export default function Ghost() {
         </div>
       ) : (
         <div ref={cardRef} style={{ position: "relative", width: 340, aspectRatio: "3/4", borderRadius: 4, overflow: "hidden", boxShadow: "0 24px 60px rgba(0,0,0,0.8)" }}>
-          <img src={image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+          <div style={{ width: "100%", height: "100%", backgroundImage: `url(${image})`, backgroundSize: "cover", backgroundPosition: "center" }} />
 
           {style && copy && !loading && (
             <div
