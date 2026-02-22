@@ -255,6 +255,8 @@ export default function Ghost() {
         link.click();
         URL.revokeObjectURL(link.href);
       }
+    } catch (e) {
+      setError(`保存エラー: ${e.message}`);
     } finally {
       setSaving(false);
     }
