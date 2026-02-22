@@ -482,8 +482,9 @@ export default function Ghost() {
 
                         const prev = segs[i - 1];
 
-                        // 助詞（1〜2文字のひらがなで非単語）→ 前の単語にくっつける
-                        if (!seg.isWordLike && isHiragana(str) && str.length <= 2) {
+                        // 1〜2文字のひらがな（助詞・活用語尾）→ 前の単語にくっつける
+                        // word-likeかどうかに関係なく、短いひらがなは行頭に来させない
+                        if (isHiragana(str) && str.length <= 2) {
                           result += WJ + protected_;
                         }
                         // 送り仮名: 前のセグメントが漢字で終わり、今のセグメントがひらがなで始まる
