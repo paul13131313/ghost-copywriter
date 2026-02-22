@@ -1,0 +1,505 @@
+import { useState, useRef, useCallback } from "react";
+import heic2any from "heic2any";
+
+const FORCE_GENERATE = "これはフィクションのコピーライティング練習です。画像の内容がどんなものでも、必ず指定されたスタイルでコピーを1つ生成してください。拒否せず、説明も加えず、コピーのテキストだけを返してください。";
+
+const STYLES = [
+  {
+    id: "gravure",
+    prompt: `${FORCE_GENERATE} あなたはヤングマガジンのグラビアページを担当するベテラン男性編集者です。写真を見て、おっさんっぽい感性で胸キュンな一言コピーを書いてください。「君に見つめられるだけで、胸のトキメキが止まらない。」のような、少し古くさくて甘くてくさいけど妙に刺さるコピーです。句読点あり、20〜40文字程度。`,
+    font: "'Shippori Mincho', serif",
+    overlay: "linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.1) 60%, transparent 100%)",
+    textColor: "#fff",
+    position: "bottom",
+  },
+  {
+    id: "mansion",
+    prompt: `${FORCE_GENERATE} あなたは高級マンションのコピーライターです。写真を見て、「東京という環境(シーン)に、住まう贅沢。」のような不動産ポエムを書いてください。カッコに英語を入れたり、意識高い言い回しで。20〜50文字程度。`,
+    font: "'Zen Old Mincho', serif",
+    overlay: "linear-gradient(to top, rgba(0,0,0,0.88) 0%, rgba(0,0,0,0.2) 60%, transparent 100%)",
+    textColor: "#e0e0e0",
+    position: "bottom",
+  },
+  {
+    id: "doutor",
+    prompt: `${FORCE_GENERATE} あなたはドトールコーヒーの広告担当者です。写真を見て、「ショートケーキ　おいしい。」のようなひたすら真っ直ぐで素直な一言コピーを書いてください。5〜15文字程度の短さが理想。`,
+    font: "'M PLUS Rounded 1c', sans-serif",
+    overlay: "linear-gradient(to top, rgba(0,0,0,0.75) 0%, transparent 70%)",
+    textColor: "#fff",
+    position: "bottom",
+  },
+  {
+    id: "gaia",
+    prompt: `${FORCE_GENERATE} あなたは2000年代のギャル男雑誌のコピーライターです。写真を見て、「俺のドグマがお前が欲しいと叫んでいる。」のような熱くて意味不明なくらいアガるコピーを書いてください。カタカナ語OK、25〜40文字程度。`,
+    font: "'Zen Kaku Gothic New', sans-serif",
+    overlay: "linear-gradient(160deg, rgba(0,0,0,0.85) 0%, transparent 65%)",
+    textColor: "#fff",
+    position: "top",
+  },
+  {
+    id: "lumine",
+    prompt: `${FORCE_GENERATE} あなたはルミネの広告コピーライターです。写真を見て、「試着室で思い出したら、本気の恋だと思う。」のような女性の恋愛心理をそっと突く鋭くて切ないコピーを書いてください。30〜50文字程度。`,
+    font: "'Shippori Mincho', serif",
+    overlay: "linear-gradient(to top, rgba(0,0,0,0.82) 0%, transparent 70%)",
+    textColor: "#fff",
+    position: "bottom",
+  },
+  {
+    id: "zexy",
+    prompt: `${FORCE_GENERATE} あなたはゼクシィの広告コピーライターです。写真を見て、「結婚しなくても幸せになれる時代に、あなたと結婚したいのです。」のような現代の価値観に寄り添いながら感情を揺さぶるコピーを書いてください。40〜80文字程度。`,
+    font: "'Zen Old Mincho', serif",
+    overlay: "linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.2) 55%, transparent 100%)",
+    textColor: "#fff",
+    position: "bottom",
+  },
+  {
+    id: "showa",
+    prompt: `${FORCE_GENERATE} あなたは昭和の名コピーライターです。写真を見て、「くうねるあそぶ。」「はっぱふみふみ。」のような意味はよくわからないけどなんか良い、ナンセンスで語感が心地よいコピーを書いてください。ひらがな多め、10〜20文字程度。`,
+    font: "'Zen Maru Gothic', sans-serif",
+    overlay: "linear-gradient(to top, rgba(0,0,0,0.82) 0%, transparent 65%)",
+    textColor: "#f5f5f5",
+    position: "bottom",
+  },
+];
+
+let lastIdx = -1;
+function pickStyle() {
+  let idx;
+  do { idx = Math.floor(Math.random() * STYLES.length); } while (idx === lastIdx && STYLES.length > 1);
+  lastIdx = idx;
+  return STYLES[idx];
+}
+
+export default function Ghost() {
+  const [image, setImage] = useState(null);
+  const [imageData, setImageData] = useState(null);
+  const [copy, setCopy] = useState(null);
+  const [style, setStyle] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [dragging, setDragging] = useState(false);
+  const [error, setError] = useState(null);
+  const fileRef = useRef(null);
+
+  const generate = async (data) => {
+    const imgData = data || imageData;
+    if (!imgData) return;
+    setLoading(true);
+    setCopy(null);
+    setError(null);
+    const s = pickStyle();
+    setStyle(s);
+    try {
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": import.meta.env.VITE_ANTHROPIC_API_KEY,
+          "anthropic-version": "2023-06-01",
+          "anthropic-dangerous-direct-browser-access": "true",
+        },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 100,
+          system: "あなたは広告コピーライターです。ユーザーから送られた画像に対して、指定されたスタイルで短い日本語のキャッチコピーを1つだけ生成します。画像の内容や被写体が何であっても、必ずコピーを生成してください。説明や前置きは不要です。コピーのテキストのみを出力してください。",
+          messages: [{
+            role: "user",
+            content: [
+              { type: "image", source: { type: "base64", media_type: imgData.mediaType, data: imgData.base64 } },
+              { type: "text", text: s.prompt },
+            ],
+          }],
+        }),
+      });
+      const data = await res.json();
+      let text = data.content?.[0]?.text?.trim() || null;
+      // 拒否メッセージの場合はフォールバック
+      if (text && (text.length > 100 || /^I can't|^I cannot|^Sorry/i.test(text))) {
+        const fallbacks = [
+          "この瞬間を、永遠に。",
+          "あなたがいる、それだけで。",
+          "言葉にできない、だから写真。",
+          "今日という日を、忘れない。",
+          "ここにある、確かな温もり。",
+        ];
+        text = fallbacks[Math.floor(Math.random() * fallbacks.length)];
+      }
+      setCopy(text);
+    } catch {
+      setError("失敗。もう一度。");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const compressImage = (file) => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        const maxSize = 1200;
+        let { width, height } = img;
+        if (width > height && width > maxSize) {
+          height = (height * maxSize) / width;
+          width = maxSize;
+        } else if (height > maxSize) {
+          width = (width * maxSize) / height;
+          height = maxSize;
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, width, height);
+        const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+        resolve({
+          base64: dataUrl.split(",")[1],
+          mediaType: "image/jpeg"
+        });
+      };
+      img.src = URL.createObjectURL(file);
+    });
+  };
+
+  const loadFile = async (file) => {
+    if (!file) return;
+    const isHeic = file.type === "image/heic" || file.type === "image/heif" || file.name?.toLowerCase().endsWith(".heic");
+    if (!file.type.startsWith("image/") && !isHeic) return;
+
+    setCopy(null);
+    setError(null);
+    setLoading(true);
+
+    try {
+      let processedFile = file;
+      if (isHeic) {
+        const blob = await heic2any({ blob: file, toType: "image/jpeg", quality: 0.9 });
+        processedFile = new File([blob], "converted.jpg", { type: "image/jpeg" });
+      }
+      setImage(URL.createObjectURL(processedFile));
+      const imgData = await compressImage(processedFile);
+      setImageData(imgData);
+      setLoading(false);
+      generate(imgData);
+    } catch (e) {
+      setError("画像の読み込みに失敗しました");
+      setLoading(false);
+    }
+  };
+
+  // 文字数に応じてフォントサイズを細かく調整（画面幅340pxに自然に収まるように）
+  const getFontSize = (text) => {
+    if (!text) return "20px";
+    const len = text.length;
+    if (len <= 12) return "28px";
+    if (len <= 18) return "24px";
+    if (len <= 25) return "20px";
+    if (len <= 35) return "18px";
+    if (len <= 45) return "16px";
+    return "14px";
+  };
+  const fontSize = getFontSize(copy);
+
+  const saveImage = async () => {
+    if (!image || !copy || !style) return;
+
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      const width = 680;
+      const height = Math.round(width * 4 / 3);
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+
+      // Draw image
+      const imgRatio = img.width / img.height;
+      const canvasRatio = width / height;
+      let sx, sy, sw, sh;
+      if (imgRatio > canvasRatio) {
+        sh = img.height;
+        sw = sh * canvasRatio;
+        sx = (img.width - sw) / 2;
+        sy = 0;
+      } else {
+        sw = img.width;
+        sh = sw / canvasRatio;
+        sx = 0;
+        sy = (img.height - sh) / 2;
+      }
+      ctx.drawImage(img, sx, sy, sw, sh, 0, 0, width, height);
+
+      // Draw gradient overlay
+      const gradient = ctx.createLinearGradient(0, height, 0, height * 0.3);
+      gradient.addColorStop(0, "rgba(0,0,0,0.85)");
+      gradient.addColorStop(0.5, "rgba(0,0,0,0.3)");
+      gradient.addColorStop(1, "transparent");
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, width, height);
+
+      // フォントサイズを文字数に応じて調整
+      const len = copy.length;
+      const fontSizeNum = len <= 12 ? 56 : len <= 18 ? 48 : len <= 25 ? 40 : len <= 35 ? 36 : len <= 45 ? 32 : 28;
+      ctx.font = `bold ${fontSizeNum}px sans-serif`;
+      ctx.fillStyle = style.textColor;
+      ctx.shadowColor = "rgba(0,0,0,0.9)";
+      ctx.shadowBlur = 16;
+      ctx.shadowOffsetY = 2;
+
+      // 「、」「。」「！」「？」で分割し、短すぎる最終行を避ける
+      const punctLines = [];
+      let currentLine = "";
+      const parts = copy.split(/([、。！？])/);
+      for (let i = 0; i < parts.length; i++) {
+        currentLine += parts[i];
+        if (/[、。！？]/.test(parts[i])) {
+          const remaining = parts.slice(i + 1).join("");
+          if (remaining.length > 0 && remaining.length <= 5) {
+            continue;
+          }
+          punctLines.push(currentLine);
+          currentLine = "";
+        }
+      }
+      if (currentLine) punctLines.push(currentLine);
+
+      // Intl.Segmenterで単語単位の折り返し（キャンバス幅に収める）
+      // 漢字＋後続ひらがな（送り仮名）は同じ単語として扱う
+      const segmenter = new Intl.Segmenter("ja", { granularity: "word" });
+      const isKanji = (ch) => ch && ch.charCodeAt(0) >= 0x4E00 && ch.charCodeAt(0) <= 0x9FFF;
+      const isHiragana = (ch) => ch && ch.charCodeAt(0) >= 0x3040 && ch.charCodeAt(0) <= 0x309F;
+      const maxWidth = width - 88;
+      const lines = [];
+      for (const pLine of punctLines) {
+        const rawSegments = [...segmenter.segment(pLine)].map(s => s.segment);
+        // 送り仮名保護: 漢字で終わるセグメントの次がひらがなで始まるセグメントなら結合
+        const segments = [];
+        for (let s = 0; s < rawSegments.length; s++) {
+          let merged = rawSegments[s];
+          while (s + 1 < rawSegments.length && isKanji(merged[merged.length - 1]) && isHiragana(rawSegments[s + 1][0])) {
+            s++;
+            merged += rawSegments[s];
+          }
+          segments.push(merged);
+        }
+        let line = "";
+        for (const seg of segments) {
+          const test = line + seg;
+          if (line && ctx.measureText(test).width > maxWidth) {
+            lines.push(line);
+            line = seg;
+          } else {
+            line = test;
+          }
+        }
+        if (line) lines.push(line);
+      }
+
+      const lineHeight = fontSizeNum * 2.0;
+      const textY = style.position === "top" ? 80 : height - 50 - (lines.length - 1) * lineHeight;
+      lines.forEach((l, i) => {
+        ctx.fillText(l, 44, textY + i * lineHeight);
+      });
+
+      // Download
+      const link = document.createElement("a");
+      link.download = `ghost-${Date.now()}.jpg`;
+      link.href = canvas.toDataURL("image/jpeg", 0.92);
+      link.click();
+    };
+    img.src = image;
+  };
+
+  return (
+    <div style={{ fontFamily: "'Noto Sans JP', sans-serif", minHeight: "100vh", background: "#080808", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24 }}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@700&family=Shippori+Mincho:wght@600;700&family=Zen+Kaku+Gothic+New:wght@700;900&family=Zen+Maru+Gothic:wght@700&family=Zen+Old+Mincho:wght@700&display=swap');
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes up { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:none; } }
+        .regen:hover { background: #e8e8e8 !important; }
+        .change:hover { border-color: #444 !important; color: #888 !important; }
+      `}</style>
+
+      <div style={{ marginBottom: 28, textAlign: "center" }}>
+        <div style={{ fontSize: 9, letterSpacing: "0.55em", color: "#2a2a2a", marginBottom: 5 }}>AI COPYWRITER</div>
+        <div style={{ fontSize: 30, fontWeight: 900, color: "#fff", letterSpacing: "0.1em" }}>"GHOST"</div>
+      </div>
+
+      {!image ? (
+        <div
+          onClick={() => fileRef.current?.click()}
+          onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={(e) => { e.preventDefault(); setDragging(false); loadFile(e.dataTransfer.files[0]); }}
+          style={{
+            width: 340, aspectRatio: "3/4",
+            border: `1px dashed ${dragging ? "#555" : "#1e1e1e"}`,
+            borderRadius: 4, cursor: "pointer",
+            display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+            gap: 14, transition: "border-color 0.2s",
+          }}
+        >
+          <div style={{ fontSize: 44, filter: "grayscale(1)", opacity: 0.25 }}>👻</div>
+          <div style={{ fontSize: 10, letterSpacing: "0.4em", color: "#2a2a2a" }}>UPLOAD IMAGE</div>
+        </div>
+      ) : (
+        <div style={{ position: "relative", width: 340, aspectRatio: "3/4", borderRadius: 4, overflow: "hidden", boxShadow: "0 24px 60px rgba(0,0,0,0.8)" }}>
+          <img src={image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+
+          {style && copy && !loading && (
+            <div
+              style={{
+                position: "absolute", inset: 0,
+                background: style.overlay,
+                display: "flex",
+                alignItems: style.position === "top" ? "flex-start" : "flex-end",
+                animation: "up 0.4s ease",
+              }}
+            >
+              <div style={{ padding: "28px 22px" }}>
+                <div style={{
+                  fontFamily: style.font,
+                  color: style.textColor,
+                  fontSize,
+                  fontWeight: 700,
+                  lineHeight: 2.0,
+                  letterSpacing: "0.15em",
+                  textShadow: "0 2px 16px rgba(0,0,0,0.9)",
+                  wordBreak: "auto-phrase",
+                  overflowWrap: "break-word",
+                  textWrap: "balance",
+                }}>
+                  {(() => {
+                    // 「、」「。」「！」「？」で分割し、短すぎる最終行を避ける
+                    const parts = copy.split(/([、。！？])/);
+                    const lines = [];
+                    let current = "";
+                    for (let i = 0; i < parts.length; i++) {
+                      current += parts[i];
+                      if (/[、。！？]/.test(parts[i])) {
+                        const remaining = parts.slice(i + 1).join("");
+                        if (remaining.length > 0 && remaining.length <= 5) {
+                          continue;
+                        }
+                        lines.push(current);
+                        current = "";
+                      }
+                    }
+                    if (current) lines.push(current);
+
+                    // Word Joiner(U+2060)で改行禁止位置を制御
+                    // ルール: 単語内で切らない、助詞は前の単語にくっつける、送り仮名を切らない
+                    const WJ = '\u2060';
+                    const segmenter = new Intl.Segmenter("ja", { granularity: "word" });
+                    const isHiragana = (s) => /^[\u3040-\u309F]+$/.test(s);
+                    const endsWithKanji = (s) => /[\u4E00-\u9FFF]$/.test(s);
+
+                    const protectLine = (text) => {
+                      const segs = [...segmenter.segment(text)];
+                      let result = '';
+                      for (let i = 0; i < segs.length; i++) {
+                        const seg = segs[i];
+                        const str = seg.segment;
+
+                        // 単語内の文字間にWJを挿入（単語途中で改行しない）
+                        const protected_ = (seg.isWordLike && str.length > 1)
+                          ? [...str].join(WJ)
+                          : str;
+
+                        if (i === 0) {
+                          result += protected_;
+                          continue;
+                        }
+
+                        const prev = segs[i - 1];
+
+                        // 助詞（1〜2文字のひらがなで非単語）→ 前の単語にくっつける
+                        if (!seg.isWordLike && isHiragana(str) && str.length <= 2) {
+                          result += WJ + protected_;
+                        }
+                        // 送り仮名: 前のセグメントが漢字で終わり、今のセグメントがひらがなで始まる単語
+                        else if (seg.isWordLike && endsWithKanji(prev.segment) && isHiragana(str)) {
+                          result += WJ + protected_;
+                        }
+                        else {
+                          result += protected_;
+                        }
+                      }
+                      return result;
+                    };
+
+                    return lines.map((line, i) => (
+                      <div key={i}>{protectLine(line)}</div>
+                    ));
+                  })()}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {loading && (
+            <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 14 }}>
+              <div style={{ width: 26, height: 26, border: "2px solid #222", borderTopColor: "#fff", borderRadius: "50%", animation: "spin 0.7s linear infinite" }} />
+              <div style={{ fontSize: 9, letterSpacing: "0.4em", color: "#555" }}>GHOSTING...</div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {error && <div style={{ color: "#ff4444", fontSize: 11, marginTop: 12 }}>{error}</div>}
+
+      <div style={{ marginTop: 18, display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "center" }}>
+        {image && (
+          <button
+            className="regen"
+            onClick={() => generate()}
+            disabled={loading}
+            style={{
+              padding: "13px 32px",
+              background: loading ? "#141414" : "#fff",
+              color: loading ? "#333" : "#000",
+              border: "none", borderRadius: 3,
+              fontSize: 11, fontWeight: 900, letterSpacing: "0.3em",
+              cursor: loading ? "not-allowed" : "pointer",
+              fontFamily: "inherit", transition: "background 0.15s",
+            }}
+          >
+            {loading ? "　　" : copy ? "もう一回" : "GENERATE"}
+          </button>
+        )}
+        {copy && (
+          <button
+            className="regen"
+            onClick={saveImage}
+            style={{
+              padding: "13px 24px",
+              background: "#fff",
+              color: "#000",
+              border: "none", borderRadius: 3,
+              fontSize: 11, fontWeight: 900, letterSpacing: "0.3em",
+              cursor: "pointer",
+              fontFamily: "inherit", transition: "background 0.15s",
+            }}
+          >
+            保存
+          </button>
+        )}
+        <button
+          className="change"
+          onClick={() => fileRef.current?.click()}
+          style={{
+            padding: "13px 18px",
+            background: "transparent", color: "#333",
+            border: "1px solid #1a1a1a", borderRadius: 3,
+            fontSize: 11, letterSpacing: "0.2em",
+            cursor: "pointer", fontFamily: "inherit", transition: "all 0.15s",
+          }}
+        >
+          {image ? "画像変える" : "画像を選ぶ"}
+        </button>
+      </div>
+
+      <input ref={fileRef} type="file" accept="image/*,.heic,.heif" style={{ display: "none" }} onChange={(e) => loadFile(e.target.files[0])} />
+    </div>
+  );
+}
