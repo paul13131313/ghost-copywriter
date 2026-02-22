@@ -231,35 +231,46 @@ export default function Ghost() {
   };
   const fontSize = getFontSize(copy);
 
-  const saveImage = async () => {
+  const [savedBlob, setSavedBlob] = useState(null);
+
+  // Step1: キャプチャしてblobを生成
+  const captureImage = async () => {
     if (!cardRef.current || saving) return;
     setSaving(true);
+    setError(null);
     try {
-      // scrollで要素を画面内に移動してからキャプチャ（iOS対策）
-      cardRef.current.scrollIntoView({ block: "center" });
-      await new Promise(r => setTimeout(r, 100));
       const canvas = await html2canvas(cardRef.current, {
         scale: 2,
         useCORS: true,
         backgroundColor: null,
-        ignoreElements: (el) => el.tagName === "IFRAME" || el.dataset?.ignoreCapture === "true",
       });
       const blob = await new Promise(r => canvas.toBlob(r, "image/jpeg", 0.92));
-      if (navigator.canShare && navigator.canShare({ files: [new File([blob], "ghost.jpg", { type: "image/jpeg" })] })) {
-        const file = new File([blob], `ghost-${Date.now()}.jpg`, { type: "image/jpeg" });
+      setSavedBlob(blob);
+    } catch (e) {
+      setError(`キャプチャエラー: ${e.message}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Step2: ユーザータップで共有/ダウンロード（iOS対策：タップ直後にshare呼び出し）
+  const shareOrDownload = async () => {
+    if (!savedBlob) return;
+    try {
+      if (navigator.canShare && navigator.canShare({ files: [new File([savedBlob], "ghost.jpg", { type: "image/jpeg" })] })) {
+        const file = new File([savedBlob], `ghost-${Date.now()}.jpg`, { type: "image/jpeg" });
         await navigator.share({ files: [file] });
       } else {
         const link = document.createElement("a");
         link.download = `ghost-${Date.now()}.jpg`;
-        link.href = URL.createObjectURL(blob);
+        link.href = URL.createObjectURL(savedBlob);
         link.click();
         URL.revokeObjectURL(link.href);
       }
     } catch (e) {
       setError(`保存エラー: ${e.message}`);
-    } finally {
-      setSaving(false);
     }
+    setSavedBlob(null);
   };
 
   if (!authed) {
@@ -470,10 +481,10 @@ export default function Ghost() {
             {loading ? "　　" : copy ? "もう一回" : "GENERATE"}
           </button>
         )}
-        {copy && (
+        {copy && !savedBlob && (
           <button
             className="regen"
-            onClick={saveImage}
+            onClick={captureImage}
             disabled={saving}
             style={{
               padding: "13px 24px",
@@ -485,7 +496,24 @@ export default function Ghost() {
               fontFamily: "inherit", transition: "background 0.15s",
             }}
           >
-            {saving ? "保存中..." : "保存"}
+            {saving ? "準備中..." : "保存"}
+          </button>
+        )}
+        {savedBlob && (
+          <button
+            className="regen"
+            onClick={shareOrDownload}
+            style={{
+              padding: "13px 24px",
+              background: "#4caf50",
+              color: "#fff",
+              border: "none", borderRadius: 3,
+              fontSize: 11, fontWeight: 900, letterSpacing: "0.3em",
+              cursor: "pointer",
+              fontFamily: "inherit", transition: "background 0.15s",
+            }}
+          >
+            保存する
           </button>
         )}
         <button
