@@ -84,6 +84,7 @@ export default function Ghost() {
   const [loading, setLoading] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [error, setError] = useState(null);
+  const [saving, setSaving] = useState(false);
   const cardRef = useRef(null);
   const fileRef = useRef(null);
 
@@ -231,21 +232,19 @@ export default function Ghost() {
   const fontSize = getFontSize(copy);
 
   const saveImage = async () => {
-    if (!cardRef.current) return;
-    // オフスクリーンにクローンしてキャプチャ（ブラウザUI要素の混入を防ぐ）
-    const clone = cardRef.current.cloneNode(true);
-    clone.style.position = "fixed";
-    clone.style.left = "-9999px";
-    clone.style.top = "0";
-    clone.style.zIndex = "-1";
-    document.body.appendChild(clone);
-    const canvas = await html2canvas(clone, {
-      scale: 2,
-      useCORS: true,
-      backgroundColor: null,
-    });
-    document.body.removeChild(clone);
-    canvas.toBlob(async (blob) => {
+    if (!cardRef.current || saving) return;
+    setSaving(true);
+    try {
+      // scrollで要素を画面内に移動してからキャプチャ（iOS対策）
+      cardRef.current.scrollIntoView({ block: "center" });
+      await new Promise(r => setTimeout(r, 100));
+      const canvas = await html2canvas(cardRef.current, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: null,
+        ignoreElements: (el) => el.tagName === "IFRAME" || el.dataset?.ignoreCapture === "true",
+      });
+      const blob = await new Promise(r => canvas.toBlob(r, "image/jpeg", 0.92));
       if (navigator.canShare && navigator.canShare({ files: [new File([blob], "ghost.jpg", { type: "image/jpeg" })] })) {
         const file = new File([blob], `ghost-${Date.now()}.jpg`, { type: "image/jpeg" });
         await navigator.share({ files: [file] });
@@ -256,7 +255,9 @@ export default function Ghost() {
         link.click();
         URL.revokeObjectURL(link.href);
       }
-    }, "image/jpeg", 0.92);
+    } finally {
+      setSaving(false);
+    }
   };
 
   if (!authed) {
@@ -471,17 +472,18 @@ export default function Ghost() {
           <button
             className="regen"
             onClick={saveImage}
+            disabled={saving}
             style={{
               padding: "13px 24px",
-              background: "#fff",
-              color: "#000",
+              background: saving ? "#141414" : "#fff",
+              color: saving ? "#333" : "#000",
               border: "none", borderRadius: 3,
               fontSize: 11, fontWeight: 900, letterSpacing: "0.3em",
-              cursor: "pointer",
+              cursor: saving ? "not-allowed" : "pointer",
               fontFamily: "inherit", transition: "background 0.15s",
             }}
           >
-            保存
+            {saving ? "保存中..." : "保存"}
           </button>
         )}
         <button
