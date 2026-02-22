@@ -322,7 +322,7 @@ export default function Ghost() {
         * { box-sizing: border-box; margin: 0; padding: 0; }
         @keyframes spin { to { transform: rotate(360deg); } }
         @keyframes up { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:none; } }
-        rt { font-size: 0.5em; font-weight: 400; letter-spacing: 0.05em; }
+        rt { font-size: 0.5em; font-weight: 400; letter-spacing: 0.05em; line-height: 1; }
         .regen:hover { background: #e8e8e8 !important; }
         .change:hover { border-color: #444 !important; color: #888 !important; }
       `}</style>
