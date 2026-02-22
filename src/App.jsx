@@ -154,6 +154,8 @@ export default function Ghost() {
         text = pool[Math.floor(Math.random() * pool.length)];
       }
       setCopy(text);
+      // 裏でキャプチャを開始
+      setTimeout(() => preCapture(), 0);
     } catch (e) {
       const msg = e instanceof TypeError
         ? `通信エラー: ${e.message} (base64: ${imgData?.base64?.length || 0}文字)`
@@ -231,13 +233,14 @@ export default function Ghost() {
   };
   const fontSize = getFontSize(copy);
 
-  const [savedBlob, setSavedBlob] = useState(null);
+  const readyBlobRef = useRef(null);
 
-  // Step1: キャプチャしてblobを生成
-  const captureImage = async () => {
-    if (!cardRef.current || saving) return;
-    setSaving(true);
-    setError(null);
+  // コピー表示後に裏でキャプチャしておく
+  const preCapture = useCallback(async () => {
+    readyBlobRef.current = null;
+    // レンダリング完了を待つ
+    await new Promise(r => setTimeout(r, 500));
+    if (!cardRef.current) return;
     try {
       const canvas = await html2canvas(cardRef.current, {
         scale: 2,
@@ -245,32 +248,46 @@ export default function Ghost() {
         backgroundColor: null,
       });
       const blob = await new Promise(r => canvas.toBlob(r, "image/jpeg", 0.92));
-      setSavedBlob(blob);
+      readyBlobRef.current = blob;
+    } catch {}
+  }, []);
+
+  // 保存ボタン: blobが準備済みなら即シェア、未準備ならキャプチャしてからダウンロード
+  const saveImage = async () => {
+    if (!cardRef.current || saving) return;
+    setSaving(true);
+    setError(null);
+    try {
+      let blob = readyBlobRef.current;
+      if (!blob) {
+        const canvas = await html2canvas(cardRef.current, {
+          scale: 2,
+          useCORS: true,
+          backgroundColor: null,
+        });
+        blob = await new Promise(r => canvas.toBlob(r, "image/jpeg", 0.92));
+      }
+      // モバイル: Share APIはタップ直後でないと動かない場合がある → ダウンロードにフォールバック
+      const canShare = navigator.canShare && navigator.canShare({ files: [new File([blob], "g.jpg", { type: "image/jpeg" })] });
+      if (canShare && readyBlobRef.current) {
+        const file = new File([blob], `ghost-${Date.now()}.jpg`, { type: "image/jpeg" });
+        await navigator.share({ files: [file] });
+      } else {
+        // ダウンロードリンク方式（iOS Safariでも動く）
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `ghost-${Date.now()}.jpg`;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }
     } catch (e) {
-      setError(`キャプチャエラー: ${e.message}`);
+      if (!e.message?.includes("abort")) {
+        setError(`保存エラー: ${e.message}`);
+      }
     } finally {
       setSaving(false);
     }
-  };
-
-  // Step2: ユーザータップで共有/ダウンロード（iOS対策：タップ直後にshare呼び出し）
-  const shareOrDownload = async () => {
-    if (!savedBlob) return;
-    try {
-      if (navigator.canShare && navigator.canShare({ files: [new File([savedBlob], "ghost.jpg", { type: "image/jpeg" })] })) {
-        const file = new File([savedBlob], `ghost-${Date.now()}.jpg`, { type: "image/jpeg" });
-        await navigator.share({ files: [file] });
-      } else {
-        const link = document.createElement("a");
-        link.download = `ghost-${Date.now()}.jpg`;
-        link.href = URL.createObjectURL(savedBlob);
-        link.click();
-        URL.revokeObjectURL(link.href);
-      }
-    } catch (e) {
-      setError(`保存エラー: ${e.message}`);
-    }
-    setSavedBlob(null);
   };
 
   if (!authed) {
@@ -481,10 +498,10 @@ export default function Ghost() {
             {loading ? "　　" : copy ? "もう一回" : "GENERATE"}
           </button>
         )}
-        {copy && !savedBlob && (
+        {copy && (
           <button
             className="regen"
-            onClick={captureImage}
+            onClick={saveImage}
             disabled={saving}
             style={{
               padding: "13px 24px",
@@ -496,24 +513,7 @@ export default function Ghost() {
               fontFamily: "inherit", transition: "background 0.15s",
             }}
           >
-            {saving ? "準備中..." : "保存"}
-          </button>
-        )}
-        {savedBlob && (
-          <button
-            className="regen"
-            onClick={shareOrDownload}
-            style={{
-              padding: "13px 24px",
-              background: "#4caf50",
-              color: "#fff",
-              border: "none", borderRadius: 3,
-              fontSize: 11, fontWeight: 900, letterSpacing: "0.3em",
-              cursor: "pointer",
-              fontFamily: "inherit", transition: "background 0.15s",
-            }}
-          >
-            保存する
+            {saving ? "保存中..." : "保存"}
           </button>
         )}
         <button
