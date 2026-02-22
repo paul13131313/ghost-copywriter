@@ -379,6 +379,7 @@ export default function Ghost() {
         * { box-sizing: border-box; margin: 0; padding: 0; }
         @keyframes spin { to { transform: rotate(360deg); } }
         @keyframes up { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:none; } }
+        rt { font-size: 0.5em; font-weight: 400; letter-spacing: 0.05em; }
         .regen:hover { background: #e8e8e8 !important; }
         .change:hover { border-color: #444 !important; color: #888 !important; }
       `}</style>
@@ -504,9 +505,19 @@ export default function Ghost() {
                       return result;
                     };
 
-                    return lines.map((line, i) => (
-                      <div key={i}>{protectLine(line)}</div>
-                    ));
+                    // ルビ変換: 漢字（ルビ）→ <ruby>漢字<rt>ルビ</rt></ruby>
+                    // protectLine後のWJ文字を含んでいてもマッチするように
+                    const toRuby = (text) => {
+                      return text.replace(
+                        /([^（(）)\s]+)[（(]([^）)]+)[）)]/g,
+                        '<ruby>$1<rt>$2</rt></ruby>'
+                      );
+                    };
+
+                    return lines.map((line, i) => {
+                      const html = toRuby(protectLine(line));
+                      return <div key={i} dangerouslySetInnerHTML={{ __html: html }} />;
+                    });
                   })()}
                 </div>
               </div>
